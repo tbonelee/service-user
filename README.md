@@ -2,7 +2,7 @@
 
 Vanilla-JavaScript browser SDK for **Weegloo ServiceLogin** - the per-Space, app-managed member sign-in feature of [Weegloo](https://weegloo.com). Zero runtime dependencies. Ships UMD, ESM, and minified builds.
 
-- Drives the full Google OAuth 2.0 flow: redirect → callback → token exchange → refresh → logout.
+- Drives the full OAuth 2.0 flow — **Google, GitHub, Facebook, GitLab, LINE, Kakao, and Naver** — redirect → callback → token exchange → refresh → logout.
 - Stores tokens in `sessionStorage` (or `localStorage`, or a custom adapter).
 - Auto-refreshes the `accessToken` before it expires.
 - Removes `exchangeToken` from the address bar **before** the network call (success, failure, or reload - never leaks).
@@ -84,6 +84,34 @@ The exact hash and SRI value for the version you installed are recorded in `dist
 
 ---
 
+## Choosing a provider
+
+ServiceLogin supports these OAuth providers: **`google`**, **`github`**, **`facebook`**, **`gitlab`**, **`line`**, **`kakao`**, and **`naver`**. The provider is just a path segment in the login URL, so a single SDK instance can drive any of them — pick the default at `init()`, or choose per click via `login({ provider })`:
+
+```html
+<button data-provider="google">Continue with Google</button>
+<button data-provider="github">Continue with GitHub</button>
+<button data-provider="facebook">Continue with Facebook</button>
+<button data-provider="gitlab">Continue with GitLab</button>
+<button data-provider="line">Continue with LINE</button>
+<button data-provider="kakao">Continue with Kakao</button>
+<button data-provider="naver">Continue with Naver</button>
+
+<script>
+  const auth = WeeglooServiceLogin.init({ spaceId: 'YOUR_SPACE_ID' }); // default 'google'
+
+  document.querySelectorAll('[data-provider]').forEach((btn) => {
+    btn.onclick = () => auth.login({ provider: btn.dataset.provider });
+  });
+</script>
+```
+
+> A provider only works if it has been enabled for the Space: each provider must be added to the `ServiceLogin` resource (with its `clientId` / `clientSecret`) in the Weegloo Console, and its redirect URI registered with the provider — see the setup checklist below. Passing a `provider` that the Space has not configured will fail at the auth server.
+
+The callback handling, token exchange, refresh, and logout are identical across providers — `handleCallback()` does not need to know which provider was used.
+
+---
+
 ## API
 
 ### `WeeglooServiceLogin.init(options) → instance`
@@ -91,7 +119,7 @@ The exact hash and SRI value for the version you installed are recorded in `dist
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `spaceId` | `string` | - (**required**) | Your Weegloo Space ID. |
-| `provider` | `string` | `'google'` | OAuth provider path segment. |
+| `provider` | `string` | `'google'` | Default OAuth provider. One of `'google'`, `'github'`, `'facebook'`, `'gitlab'`, `'line'`, `'kakao'`, `'naver'`. Can be overridden per call via `login({ provider })`. |
 | `authBaseUrl` | `string` | `'https://auth.weegloo.com'` | Base URL of the auth server. |
 | `storage` | `'session' \| 'local' \| object` | `'session'` | Token storage. The `'session'` default uses `sessionStorage` and is the recommended security posture. A custom adapter `{ getItem, setItem, removeItem }` is also accepted. |
 | `storageKey` | `string` | `weegloo:serviceLogin:<spaceId>` | Key used in storage. |
@@ -104,7 +132,7 @@ Calling `init()` multiple times with the same `spaceId | authBaseUrl` pair retur
 
 | Method | Returns | Description |
 |---|---|---|
-| `login(opts?)` | `void` | Redirects the browser to the OAuth login page. |
+| `login(opts?)` | `void` | Redirects the browser to the OAuth login page. Pass `{ provider }` (`'google' \| 'github' \| 'facebook' \| 'gitlab' \| 'line' \| 'kakao' \| 'naver'`) to override the default for this call, and `{ returnTo }` to stash a value readable after `handleCallback()` via `consumeReturnTo()`. |
 | `handleCallback(opts?)` | `Promise<tokens>` | Call on the callback page. **First** strips `exchangeToken` from the address bar, **then** exchanges it for tokens and stores them. |
 | `isLoggedIn()` | `boolean` | `true` if `accessToken` is unexpired *or* a valid `refreshToken` exists. |
 | `getAccessToken()` | `Promise<string \| null>` | Returns the access token, auto-refreshing if necessary. Returns `null` if the user is not logged in or refresh failed. |
@@ -141,20 +169,62 @@ A successful sign-in returns a Bearer Token tied to the corresponding `ServiceUs
 
 ## Setup checklist (one-time)
 
-### 1. Configure the OAuth client in Google Cloud
+Repeat **step 1** for every provider you want to enable (`google`, `github`, `facebook`, `gitlab`, `line`, `kakao`, `naver`); they are independent and can be turned on individually.
 
-1. In Google Cloud Console → "Google Auth Platform" → **create an OAuth Client**.
-2. Add `https://auth.weegloo.com` to **Authorized JavaScript origins**.
-3. Add `https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/google` to **Authorized redirect URIs**, where `{spaceId}` is the Weegloo Space ID hosting the ServiceLogin.
+### 1. Register an OAuth client with each provider
 
-> Note: the `/login/oauth2/code/{provider}` path is the **redirect URI** that Google calls Weegloo at - it is *different* from the URL the SDK navigates the browser to (`/login/oauth2/{provider}`, no `code` segment).
+In the provider's developer console, create an OAuth app and register Weegloo's redirect URI:
+
+`https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/code/{provider}`
+
+where `{spaceId}` is the Weegloo Space ID hosting the ServiceLogin and `{provider}` is one of `google`, `github`, `facebook`, `gitlab`, `line`, `kakao`, `naver`.
+
+| Provider | `provider` value | Where to register | Redirect URI field |
+|---|---|---|---|
+| Google | `google` | Google Cloud Console → "Google Auth Platform" → OAuth Client | **Authorized redirect URIs** |
+| GitHub | `github` | GitHub → Settings → Developer settings → OAuth Apps | **Authorization callback URL** |
+| Facebook | `facebook` | Meta for Developers → your App → Facebook Login → Settings | **Valid OAuth Redirect URIs** |
+| GitLab | `gitlab` | GitLab → your avatar (profile photo, top-right) → Edit profile → Access > Applications → Add new application (or a group's / the Admin area's Applications) | **Redirect URI** |
+| LINE | `line` | LINE Developers Console → your Provider → create a **LINE Login** channel → LINE Login tab | **Callback URL** |
+| Kakao | `kakao` | Kakao Developers → My Application → App → Platform key → REST API key | **Redirect URI** |
+| Naver | `naver` | Naver Developers → Application → Register application → select "네이버 로그인" (Naver Login) | **Callback URL** |
+
+> Note: the `/login/oauth2/code/{provider}` path is the **redirect URI** that the provider calls Weegloo at — it is *different* from the URL the SDK navigates the browser to (`/login/oauth2/{provider}`, no `code` segment). This redirect URI is deploy-independent: it always points at `auth.weegloo.com`, so you can register it before your own app is deployed.
+
+Provider-specific gotchas when filling in step 2's `clientId` / `clientSecret`:
+
+- **GitLab** — `clientId` is the **Application ID**, `clientSecret` is the **Secret** (shown once at creation).
+- **LINE** — the channel must be a **LINE Login** channel of App type **Web app**; `clientId` is the **Channel ID**, `clientSecret` is the **Channel secret**. Publish the channel (out of "Developing") so users beyond admins/testers can sign in.
+- **Kakao** — activate Kakao Login first (Kakao Login → set Status **ON**); `clientId` is the **REST API key**, `clientSecret` is the **Client secret** (enabled by default on newer keys — leave it on and supply it).
+- **Naver** — `clientId` / `clientSecret` are the **Client ID** / **Client Secret** issued when you register the app. A new app starts in **development status**: only the developer account and registered **test members** can sign in until the app passes Naver's **review** and goes to production.
+
+**Enable email — required for sign-up.** This product uses the member's email address at sign-up, and sign-in fails if the provider returns no email. **Weegloo already requests the necessary scopes** for each provider, so you don't configure scopes anywhere in Weegloo — your only job is to make sure the provider is allowed to release the email (and the profile fields). The scopes Weegloo requests, and what you must enable in each provider's console:
+
+- **Google** — scopes `email`, `profile`. Nothing extra to enable — both are non-sensitive, so no Google verification is required.
+- **GitHub** — scopes `read:user`, `user:email`. Nothing to enable (OAuth Apps have no scope settings); `user:email` means the email is returned even when the member keeps it private.
+- **Facebook** — scopes `email`, `public_profile`. Give the `email` permission **Advanced access** under **App Review → Permissions and Features** (Business Verification is usually required); by default it only covers app roles/testers.
+- **GitLab** — scope `read_user`. When creating the application, tick **`read_user`** — it grants read access to the account email.
+- **LINE** — scopes `profile`, `email` (plus `openid`, injected automatically). Apply for **Email address permission** (Basic settings → OpenID Connect → Apply) and upload a screenshot of how you request and use the email; LINE returns the email in the **ID token**, not the profile response.
+- **Kakao** — scopes `profile_nickname`, `profile_image`, `account_email`. Enable those consent items (Kakao Login → Consent Items). `account_email` is restricted: it needs a **Biz App** (business registration or identity verification) plus review — until approved it only works for the app's own team members.
+- **Naver** — Naver ignores the OAuth scopes and uses the app's **제공 정보 (Provided info)** setting instead. Set **Email address**, **Nickname**, and **Profile image** to **Required (필수)** — items left **Optional (추가)** are never returned.
 
 ### 2. Configure ServiceLogin in the Weegloo Console
 
 1. In the target Space, **create a `ServiceLogin`** record.
-2. Set `clientId` / `clientSecret` to the values issued by Google Cloud above.
+2. Add an entry to its `providers` array for each provider you enabled in step 1, with the `clientId` / `clientSecret` issued by that provider. The resource field that identifies the provider is `registrationId` — its value is the same provider string you pass to the SDK (`google` / `github` / `facebook` / `gitlab` / `line` / `kakao` / `naver`):
+   ```json
+   "providers": [
+     { "registrationId": "google",   "clientId": "...", "clientSecret": "..." },
+     { "registrationId": "github",   "clientId": "...", "clientSecret": "..." },
+     { "registrationId": "facebook", "clientId": "...", "clientSecret": "..." },
+     { "registrationId": "gitlab",   "clientId": "...", "clientSecret": "..." },
+     { "registrationId": "line",     "clientId": "...", "clientSecret": "..." },
+     { "registrationId": "kakao",    "clientId": "...", "clientSecret": "..." },
+     { "registrationId": "naver",    "clientId": "...", "clientSecret": "..." }
+   ]
+   ```
 3. Set `defaultRole` to a `Refer` of a `ServiceUserRole` you have created in advance with the appropriate permissions. Per-member overrides are possible later via `ServiceUser.roleOverride`.
-4. Set `callbackUrl` to a URL on **your own product** that the SDK can intercept - Weegloo will redirect the browser there with `?exchangeToken=...` after a successful Google sign-in. The SDK's `handleCallback()` consumes this parameter to obtain a Bearer Token usable against ACMA / ACDA.
+4. Set `callbackUrl` to a URL on **your own product** that the SDK can intercept — Weegloo will redirect the browser there with `?exchangeToken=...` after a successful sign-in (any provider). The SDK's `handleCallback()` consumes this parameter to obtain a Bearer Token usable against ACMA / ACDA.
 
 ---
 
@@ -163,9 +233,9 @@ A successful sign-in returns a Bearer Token tied to the corresponding `ServiceUs
 The SDK encapsulates all of this; you only need to read it if you are debugging or porting the flow elsewhere.
 
 1. Navigate the browser to:  
-   `GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/google`  
-   The user signs in through Google.
-2. Weegloo redirects the browser to the configured `callbackUrl` with `?exchangeToken=…` appended.
+   `GET https://auth.weegloo.com/v1/spaces/{spaceId}/login/oauth2/{provider}`  
+   where `{provider}` is `google`, `github`, `facebook`, `gitlab`, `line`, `kakao`, or `naver`. The user signs in through that provider.
+2. Weegloo redirects the browser to the configured `callbackUrl` with `?exchangeToken=…` appended (the same `callbackUrl` for every provider).
 3. Exchange the `exchangeToken` for tokens:  
    `POST https://auth.weegloo.com/v1/spaces/{spaceId}/oauth/token`  
    `Content-Type: application/json`  

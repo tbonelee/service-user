@@ -1,6 +1,6 @@
 {
   "name": "weegloo-service-user",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Weegloo ServiceLogin SDK for browser apps - Google OAuth 2.0 sign-in for app-managed members of a Weegloo Space. Pure vanilla JavaScript, zero dependencies.",
   "keywords": [
     "weegloo",
@@ -17,10 +17,12 @@
   "main": "dist/service-login.js",
   "module": "dist/service-login.esm.js",
   "browser": "dist/service-login.min.js",
+  "types": "dist/service-login.d.ts",
   "unpkg": "dist/service-login.min.js",
   "jsdelivr": "dist/service-login.min.js",
   "exports": {
     ".": {
+      "types": "./dist/service-login.d.ts",
       "import": "./dist/service-login.esm.js",
       "require": "./dist/service-login.js",
       "browser": "./dist/service-login.min.js",
@@ -33,13 +35,19 @@
   "files": [
     "dist/",
     "src/service-login.js",
-    "src/weegloo-service-login.js",
+    "src/types.d.ts",
+    "examples/",
     "README.md",
     "LICENSE"
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "node scripts/build.js",
-    "prepublishOnly": "npm run build && node -e \"const v=require('./package.json').version;const t=require('fs').readFileSync('src/service-login.js','utf8');if(t.indexOf(\\\"'\\\"+v+\\\"'\\\")<0&&t.indexOf('\\\"'+v+'\\\"')<0){throw new Error('VERSION mismatch in src/service-login.js: package.json='+v);}console.log('OK src/service-login.js (VERSION='+v+')');\""
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "npm run typecheck && node scripts/build.js",
+    "test": "npm run build && node test/api-surface.test.cjs",
+    "prepublishOnly": "npm test && node -e \"const v=require('./package.json').version;const t=require('fs').readFileSync('src/service-login.js','utf8');if(t.indexOf(\\\"'\\\"+v+\\\"'\\\")<0&&t.indexOf('\\\"'+v+'\\\"')<0){throw new Error('VERSION mismatch in src/service-login.js: package.json='+v);}console.log('OK src/service-login.js (VERSION='+v+')');\""
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }

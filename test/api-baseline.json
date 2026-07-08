@@ -1,0 +1,24 @@
+{
+  "//": "Frozen public API surface (backward-compat gate). Removing/renaming/retyping any member here is a BREAKING change: bump the MAJOR version and update this file deliberately. Adding new members is fine (superset allowed) and does not require an edit.",
+  "module": {
+    "init": "function",
+    "VERSION": "string"
+  },
+  "instance": {
+    "acmaBaseUrl": "string",
+    "authBaseUrl": "string",
+    "consumeReturnTo": "function",
+    "fetch": "function",
+    "getAccessToken": "function",
+    "getTokens": "function",
+    "getUser": "function",
+    "handleCallback": "function",
+    "isAuthenticated": "function",
+    "isLoggedIn": "function",
+    "login": "function",
+    "logout": "function",
+    "onChange": "function",
+    "refresh": "function",
+    "spaceId": "string"
+  }
+}

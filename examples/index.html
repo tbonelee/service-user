@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>weegloo-service-user · starter</title>
+<!--
+  Official starter for the Weegloo ServiceLogin SDK (weegloo-service-user).
+
+  This ONE file shows the complete, correct sign-in flow — the parts that are
+  easy to get wrong are called out inline:
+    1. init(spaceId, provider)
+    2. On the callback page: handleCallback()  (this page IS the callbackUrl)
+    3. Gate UI with isLoggedIn()  ← the method is isLoggedIn(), not isAuthenticated()
+                                     (isAuthenticated() exists as an alias)
+    4. Restore the session on a normal reload (not just on the callback)
+    5. Load the current member with getUser()  → ACMA GET /v1/me
+    6. Call ACMA/ACDA with auth.fetch() (Bearer injected; never CMA/CDA)
+    7. Re-render on change with onChange(); sign out with logout()
+
+  Setup (do once):
+    • Provider console → register the redirect URI (provider → Weegloo):
+        https://auth.weegloo.com/v1/spaces/<SPACE_ID>/login/oauth2/code/<provider>
+      NOTE the "/code/" segment — that is NOT this page's URL.
+    • Weegloo Console → ServiceLogin: set clientId/clientSecret, a least-privilege
+      defaultRole, and callbackUrl = the URL of THIS page.
+
+  Dev vs prod: this loads the "latest" CDN alias for convenience. For production,
+  pin a hashed build (see dist/manifest.json) so a CDN refresh can't change your SDK.
+-->
+<script src="https://weegloo-media.com/static/libs/service-login/service-login.min.js"></script>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 20px; color: #1a1a1a; }
+  button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+  button.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  pre { background: #f5f3ee; padding: 12px; border-radius: 8px; overflow: auto; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 16px 0; }
+  .muted { color: #6b655c; }
+</style>
+</head>
+<body>
+<h1>weegloo-service-user · starter</h1>
+
+<div class="row">
+  <label>Space ID: <input id="spaceId" placeholder="YOUR_SPACE_ID" size="24"></label>
+  <label>Provider:
+    <select id="provider">
+      <option>google</option><option>github</option><option>kakao</option>
+      <option>naver</option><option>line</option><option>facebook</option><option>gitlab</option>
+    </select>
+  </label>
+  <button id="apply">Use</button>
+</div>
+
+<div id="app" class="muted">Enter a Space ID and click “Use”.</div>
+
+<script>
+  var auth = null;
+  var unsubscribe = null;
+
+  function el(id) { return document.getElementById(id); }
+
+  function render() {
+    var app = el('app');
+    if (!auth) { app.textContent = 'Enter a Space ID and click “Use”.'; return; }
+
+    // (3) Gate on isLoggedIn(). NOTE: it's isLoggedIn(), not isAuthenticated()
+    //     (isAuthenticated() also works — it's an alias).
+    if (!auth.isLoggedIn()) {
+      app.innerHTML = '<p class="muted">Not signed in.</p>';
+      var b = document.createElement('button');
+      b.className = 'primary';
+      b.textContent = 'Sign in';
+      b.onclick = function () { auth.login(); };   // navigates to the provider
+      app.appendChild(b);
+      return;
+    }
+
+    app.innerHTML = '<p>Signed in ✓</p><pre id="me">loading /v1/me …</pre>';
+    var out = document.createElement('button');
+    out.textContent = 'Sign out';
+    out.onclick = function () { auth.logout(); };  // clears tokens + revokes server-side
+    app.appendChild(out);
+
+    // (5) Current member via the convenience method (ACMA GET /v1/me).
+    auth.getUser().then(function (me) {
+      el('me').textContent = JSON.stringify(me, null, 2);
+    }).catch(function (e) {
+      el('me').textContent = 'getUser failed: ' + (e && e.message);
+    });
+
+    // (6) Example authed call. The Bearer is injected automatically.
+    //     Valid ONLY against ACMA / ACDA / Upload — never CMA / CDA.
+    // auth.fetch('https://acda.weegloo.com/v1/spaces/' + auth.spaceId +
+    //            '/content-types/<CT_ID>/contents').then(r => r.json()).then(console.log);
+  }
+
+  function start(spaceId, provider) {
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+
+    // (1) Create the client.
+    auth = WeeglooServiceLogin.init({ spaceId: spaceId, provider: provider });
+
+    // (7) Re-render whenever auth state changes (login / refresh / logout).
+    unsubscribe = auth.onChange(function () { render(); });
+
+    // (2) + (4) On page load, resolve the session ONCE:
+    //   - if we're on the OAuth callback (?exchangeToken=…) → exchange it,
+    //   - otherwise if a stored session exists → just restore it.
+    var boot = location.search.indexOf('exchangeToken=') >= 0
+      ? auth.handleCallback()          // exchanges + stores tokens, strips the URL
+      : Promise.resolve();
+
+    boot.catch(function (e) { console.error('sign-in callback failed', e); })
+        .then(render);
+  }
+
+  el('apply').onclick = function () {
+    var id = el('spaceId').value.trim();
+    if (id) start(id, el('provider').value);
+  };
+
+  // Auto-start if a Space ID is provided via ?spaceId=… (handy for the callbackUrl).
+  var qp = new URLSearchParams(location.search);
+  if (qp.get('spaceId')) {
+    el('spaceId').value = qp.get('spaceId');
+    if (qp.get('provider')) el('provider').value = qp.get('provider');
+    start(qp.get('spaceId'), qp.get('provider') || 'google');
+  }
+</script>
+</body>
+</html>

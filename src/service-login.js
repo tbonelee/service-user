@@ -17,6 +17,7 @@
  *     // logout:        auth.logout()
  *   </script>
  */
+// @ts-check
 (function (root, factory) {
   if (typeof define === 'function' && define.amd) {
     // AMD
@@ -26,12 +27,13 @@
     module.exports = factory();
   } else {
     // Browser global
-    root.WeeglooServiceLogin = factory();
+    (/** @type {any} */ (root)).WeeglooServiceLogin = factory();
   }
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
   var DEFAULT_AUTH_BASE_URL = 'https://auth.weegloo.com';
+  var DEFAULT_ACMA_BASE_URL = 'https://acma.weegloo.com';
   var DEFAULT_PROVIDER = 'google';
   var DEFAULT_LEEWAY_SECONDS = 60;
   var DEFAULT_STORAGE_KEY_PREFIX = 'weegloo:serviceLogin:';
@@ -137,7 +139,7 @@
       var parser = ct.indexOf('json') >= 0 ? res.json() : res.text();
       return parser.then(function (payload) {
         if (!res.ok) {
-          var err = new Error('Weegloo ServiceLogin HTTP ' + res.status);
+          var err = /** @type {any} */ (new Error('Weegloo ServiceLogin HTTP ' + res.status));
           err.status = res.status;
           err.body = payload;
           throw err;
@@ -145,7 +147,7 @@
         return payload;
       }, function () {
         if (!res.ok) {
-          var err2 = new Error('Weegloo ServiceLogin HTTP ' + res.status);
+          var err2 = /** @type {any} */ (new Error('Weegloo ServiceLogin HTTP ' + res.status));
           err2.status = res.status;
           throw err2;
         }
@@ -208,15 +210,21 @@
   // Cache of instances keyed by spaceId so init() can be called freely.
   var instanceCache = {};
 
+  /**
+   * @param {import('./types').InitOptions} options
+   * @returns {import('./types').ServiceLoginClient}
+   */
   function init(options) {
     if (!options || !options.spaceId) {
       throw new Error('WeeglooServiceLogin.init: "spaceId" is required.');
     }
-    var cacheKey = options.spaceId + '|' + (options.authBaseUrl || DEFAULT_AUTH_BASE_URL);
+    var cacheKey = options.spaceId + '|' + (options.authBaseUrl || DEFAULT_AUTH_BASE_URL) +
+      '|' + (options.acmaBaseUrl || DEFAULT_ACMA_BASE_URL);
     if (instanceCache[cacheKey]) return instanceCache[cacheKey];
 
     var spaceId = String(options.spaceId);
     var authBaseUrl = options.authBaseUrl || DEFAULT_AUTH_BASE_URL;
+    var acmaBaseUrl = options.acmaBaseUrl || DEFAULT_ACMA_BASE_URL;
     var provider = options.provider || DEFAULT_PROVIDER;
     var storage = pickStorage(options.storage);
     var storageKey = options.storageKey || (DEFAULT_STORAGE_KEY_PREFIX + spaceId);
@@ -390,10 +398,23 @@
       });
     }
 
+    function getUser() {
+      // The current ServiceUser for the active session.
+      // IMPORTANT: ACMA exposes this at /v1/me - NOT /v1/spaces/{spaceId}/me.
+      return authedFetch(joinUrl(acmaBaseUrl, '/v1/me')).then(function (res) {
+        if (!res.ok) {
+          var err = /** @type {any} */ (new Error('WeeglooServiceLogin.getUser: HTTP ' + res.status));
+          err.status = res.status;
+          throw err;
+        }
+        return res.json();
+      });
+    }
+
     function authedFetch(input, init) {
       return getAccessToken().then(function (token) {
         if (!token) {
-          var err = new Error('WeeglooServiceLogin.fetch: not logged in.');
+          var err = /** @type {any} */ (new Error('WeeglooServiceLogin.fetch: not logged in.'));
           err.code = 'NOT_LOGGED_IN';
           throw err;
         }
@@ -436,9 +457,11 @@
       return v;
     }
 
+    /** @type {import('./types').ServiceLoginClient} */
     var instance = {
       spaceId: spaceId,
       authBaseUrl: authBaseUrl,
+      acmaBaseUrl: acmaBaseUrl,
 
       login: login,
       handleCallback: handleCallback,
@@ -446,8 +469,10 @@
       logout: logout,
 
       isLoggedIn: isLoggedIn,
+      isAuthenticated: isLoggedIn, // alias - common ecosystem name
       getTokens: getTokens,
       getAccessToken: getAccessToken,
+      getUser: getUser,
 
       fetch: authedFetch,
       onChange: onChange,
@@ -461,6 +486,6 @@
 
   return {
     init: init,
-    VERSION: '1.1.0'
+    VERSION: '1.2.0'
   };
 }));

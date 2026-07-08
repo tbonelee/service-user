@@ -1,3 +1,5 @@
 ﻿src/index.html
 .cursor
 dist
+
+node_modules

@@ -265,6 +265,19 @@ function main() {
     console.log('build: dist/' + hashed.padEnd(40) + ' ' + manifest.files[o.kind].bytes + ' B');
   }
 
+  // Ship the TypeScript declarations. `src/types.d.ts` is the single source of
+  // truth, verified against the implementation by `npm run typecheck` (which
+  // `npm run build` runs first). Emit it as the published contract AND as
+  // `types.d.ts` so the shipped UMD's JSDoc `import('./types')` resolves if a
+  // consumer type-checks the raw dist JS.
+  const DTS = path.join(ROOT, 'src', 'types.d.ts');
+  if (fs.existsSync(DTS)) {
+    const dts = read(DTS);
+    write(path.join(DIST, 'service-login.d.ts'), dts);
+    write(path.join(DIST, 'types.d.ts'), dts);
+    console.log('build: dist/service-login.d.ts + dist/types.d.ts (types)');
+  }
+
   write(path.join(DIST, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   console.log('build: dist/manifest.json');
 }

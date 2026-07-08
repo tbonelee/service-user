@@ -1,0 +1,15 @@
+{
+  "//": "Dev-only. Type-checks the JS implementation against src/types.d.ts so the published types cannot drift from the runtime. Run via `npm run typecheck` (also part of `npm run build`).",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2018",
+    "lib": ["ES2018", "DOM"],
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "strict": false,
+    "skipLibCheck": true
+  },
+  "include": ["src/service-login.js", "src/types.d.ts", "src/env.d.ts"]
+}

@@ -121,6 +121,7 @@ The callback handling, token exchange, refresh, and logout are identical across 
 | `spaceId` | `string` | - (**required**) | Your Weegloo Space ID. |
 | `provider` | `string` | `'google'` | Default OAuth provider. One of `'google'`, `'github'`, `'facebook'`, `'gitlab'`, `'line'`, `'kakao'`, `'naver'`. Can be overridden per call via `login({ provider })`. |
 | `authBaseUrl` | `string` | `'https://auth.weegloo.com'` | Base URL of the auth server. |
+| `acmaBaseUrl` | `string` | `'https://acma.weegloo.com'` | Base URL of ACMA, used by `getUser()`. |
 | `storage` | `'session' \| 'local' \| object` | `'session'` | Token storage. The `'session'` default uses `sessionStorage` and is the recommended security posture. A custom adapter `{ getItem, setItem, removeItem }` is also accepted. |
 | `storageKey` | `string` | `weegloo:serviceLogin:<spaceId>` | Key used in storage. |
 | `autoRefresh` | `boolean` | `true` | If `true`, `getAccessToken()` will refresh automatically when the access token is near expiry. |
@@ -135,12 +136,24 @@ Calling `init()` multiple times with the same `spaceId | authBaseUrl` pair retur
 | `login(opts?)` | `void` | Redirects the browser to the OAuth login page. Pass `{ provider }` (`'google' \| 'github' \| 'facebook' \| 'gitlab' \| 'line' \| 'kakao' \| 'naver'`) to override the default for this call, and `{ returnTo }` to stash a value readable after `handleCallback()` via `consumeReturnTo()`. |
 | `handleCallback(opts?)` | `Promise<tokens>` | Call on the callback page. **First** strips `exchangeToken` from the address bar, **then** exchanges it for tokens and stores them. |
 | `isLoggedIn()` | `boolean` | `true` if `accessToken` is unexpired *or* a valid `refreshToken` exists. |
+| `isAuthenticated()` | `boolean` | Alias of `isLoggedIn()` (common ecosystem name). |
 | `getAccessToken()` | `Promise<string \| null>` | Returns the access token, auto-refreshing if necessary. Returns `null` if the user is not logged in or refresh failed. |
 | `getTokens()` | `tokens \| null` | Returns the stored token bundle. |
+| `getUser()` | `Promise<ServiceUser>` | The current member — `GET {acmaBaseUrl}/v1/me`. Rejects if signed out. (Use this instead of hand-rolling `/v1/me`; note ACMA exposes it at `/v1/me`, **not** `/v1/spaces/{spaceId}/me`.) |
 | `refresh()` | `Promise<tokens>` | Forces a refresh (`POST /oauth/refresh`). |
 | `logout()` | `Promise<true>` | Calls `DELETE /oauth/token` with the stored `refreshToken` and clears local storage. |
 | `fetch(input, init?)` | `Promise<Response>` | A `fetch` wrapper that injects `Authorization: Bearer <accessToken>` and avoids forcing `Accept: application/json` (Weegloo serves a vendor media type). |
 | `onChange(cb)` | `() => void` | Subscribe to lifecycle events: `'login' \| 'refresh' \| 'logout' \| 'set' \| 'clear' \| 'refresh-failed'`. Returns an unsubscribe function. |
+
+### TypeScript
+
+Type definitions ship in the package (`dist/service-login.d.ts`, referenced by `package.json#types`) — no `@types/…` needed. `init()` returns a fully-typed `ServiceLoginClient`, so editors autocomplete the real method names (`isLoggedIn`, `getUser`, `fetch`, …).
+
+**Types are checked against the runtime.** `src/types.d.ts` is the single source of truth, and the JS implementation is checked against it with `tsc --checkJs` (`npm run typecheck`, run by both `npm run build` and `prepublishOnly`). The `instance` object is annotated `@type ServiceLoginClient`, so if a client method is **renamed, removed, or added without declaring it** — i.e. the shape stops matching the `.d.ts` — the build fails. This is a **member-surface** guarantee (name + presence + kind); deep per-parameter signatures of individual methods are *not* fully verified, since the internal helpers are untyped JS. So it prevents the common drift (a mismatched method set) but is not a full signature proof.
+
+### Runnable starter
+
+A complete, framework-free example — init → callback → `isLoggedIn()` gating → session-restore-on-reload → `getUser()` → authed `fetch` → `logout()` — is in [`examples/index.html`](examples/index.html). Point your `ServiceLogin.callbackUrl` at it (or open it with `?spaceId=…`) to try the whole flow.
 
 ---
 
